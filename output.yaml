@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Boilerplate SAM template.
+Globals:
+  Api:
+    Cors:
+      AllowHeaders: '''*'''
+      AllowMethods: '''*'''
+      AllowOrigin:
+        Fn::Sub: '''https://${DomainName}'''
+Parameters:
+  Certificate:
+    Default: arn:aws:acm:region:numbers:certificate/uuid
+    Description: Certificate for custom domain
+    Type: String
+  DomainName:
+    Default: domain.com
+    Description: Domain name for things
+    Type: String
+  Subdomain:
+    Default: api.
+    Description: Subdomain of your site
+    Type: String
+Resources:
+  ApiDomainName:
+    Properties:
+      CertificateArn:
+        Ref: Certificate
+      DomainName:
+        Fn::Sub: ${Subdomain}${DomainName}
+    Type: AWS::ApiGateway::DomainName
+  BasePathMapping:
+    DependsOn: RestApiprodStage
+    Properties:
+      DomainName:
+        Fn::Sub: ${Subdomain}${DomainName}
+      RestApiId:
+        Ref: RestApi
+      Stage: prod
+    Type: AWS::ApiGateway::BasePathMapping
+  RestApi:
+    Properties:
+      Name: RestApi
+      StageName: prod
+    Type: AWS::Serverless::Api
+  fileServerBucket:
+    Type: AWS::S3::Bucket
+  lambdaFunction:
+    Properties:
+      CodeUri: s3://alex-lambda-functions/dd100c71e2623c4404b2b6814c1587ed
+      Events:
+        lambdaAPI:
+          Properties:
+            Method: get
+            Path: /lambdafunction
+            RestApiId:
+              Ref: RestApi
+          Type: Api
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - lambdaRole
+        - Arn
+      Runtime: nodejs8.10
+    Type: AWS::Serverless::Function
+  lambdaRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - s3:GetObject
+            Effect: Allow
+            Resource:
+            - Fn::GetAtt:
+              - fileServerBucket
+              - Arn
+            - Fn::Sub: ${fileServerBucket.Arn}/*
+          Version: 2012-10-17
+        PolicyName: s3GetPutPolicy
+    Type: AWS::IAM::Role
+  route53Domain:
+    Properties:
+      HostedZoneName:
+        Fn::Sub: ${DomainName}.
+      RecordSets:
+      - AliasTarget:
+          DNSName:
+            Fn::GetAtt:
+            - ApiDomainName
+            - DistributionDomainName
+          HostedZoneId:
+            Fn::GetAtt:
+            - ApiDomainName
+            - DistributionHostedZoneId
+        Name:
+          Fn::Join:
+          - ''
+          - - Ref: Subdomain
+            - Ref: DomainName
+            - .
+        Type: A
+    Type: AWS::Route53::RecordSetGroup
+Transform: AWS::Serverless-2016-10-31

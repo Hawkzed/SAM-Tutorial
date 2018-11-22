@@ -1,0 +1,107 @@
+---
+# Look at https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+# and https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md
+# for information on how to use this template
+AWSTemplateFormatVersion: 2010-09-09        # Defines this YAMl as a cloudformation template
+Transform: AWS::Serverless-2016-10-31       # Integrates SAM into the template
+Description: Boilerplate SAM template.
+Parameters:                                 # Parameters that you can set outside of your template to pass values to it
+  DomainName:
+    Type: String
+    Description: Domain name for things
+    Default: domain.com
+  Certificate:                              # The ARN of your certificate, should look something like:
+    Type: String                  # arn:aws:acm:eu-west-1:867530202211:certificate/658a382b-563e-40bb-8098-e073385310bf
+    Description: Certificate for custom domain
+    Default: arn:aws:acm:region:numbers:certificate/uuid
+  Subdomain:
+    Type: String
+    Description: Subdomain of your site
+    Default: api.
+Globals:
+    Api:
+      Cors:                                 # Use if you want CORS otherwise remove this
+        AllowMethods: "'*'"                 # CORS has caused me headaches in the past so it might be worth
+        AllowHeaders: "'*'"                 # it to remove this entirely
+        AllowOrigin: !Sub "'https://${DomainName}'"
+
+Resources:
+  route53Domain:                            # Creates a domain in Route53 with api as the prefix e.g. api.domain.com
+    Type: AWS::Route53::RecordSetGroup      # This guide assumes you have a Route53 domain to use
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      RecordSets:
+        - Name: !Join
+          - ''
+          - - !Ref Subdomain                # Change this if you want a different sub-domain
+            - !Ref DomainName
+            - '.'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt ApiDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt ApiDomainName.DistributionDomainName
+
+  BasePathMapping:                          # Creates a API Gateway stage called prod
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Sub ${Subdomain}${DomainName}
+      RestApiId:
+        Ref: RestApi
+      Stage: prod
+    DependsOn: RestApiprodStage
+
+  ApiDomainName:                            # Assigns the domain's certificate to API Gateway
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Sub ${Subdomain}${DomainName}
+      CertificateArn: !Ref Certificate
+
+  RestApi:                                  # Creates an API with stage Prod
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: RestApi
+      StageName: prod
+
+  lambdaFunction:                           # Creates a lambda function
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/index.js                 # Specify where in your directory the code is
+      Handler: index.handler              # Specify the name of lambda's entry function
+      Role: !GetAtt lambdaRole.Arn          # A role defined in the template
+      Runtime: nodejs8.10                   # Change runtime to whatever language you are suing e.g. python3.6
+      Events:
+        lambdaAPI:
+          Type: Api                         # Assigns the lambda function an API call
+          Properties:
+            Path: /lambdafunction           # Put your path here! e.g. api.domain.com/lambdafunction
+            Method: get                     # Put your method here! e.g. post, get, put, delete...
+            RestApiId: !Ref RestApi
+
+  lambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:                             # Put your policy documents here. What follows is an
+        - PolicyName: s3GetPutPolicy        # example of a policy that allows GetObject access to all objects
+          PolicyDocument:                   # in a particular bucket, defined later in this template
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !GetAtt fileServerBucket.Arn
+                  - !Sub ${fileServerBucket.Arn}/*
+
+  fileServerBucket:                         # Sample bucket, only necessary if you want a bucket
+    Type: AWS::S3::Bucket
