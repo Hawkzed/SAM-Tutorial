@@ -1,12 +1,12 @@
-##README.md
+## README.md
 ![Logo](aws_sam_introduction.png)
-#TEMPLATE INSTRUCTIONS
+# TEMPLATE INSTRUCTIONS
 I'm making this guide with the assumption that the user has only entry-level familiarity with AWS to make it accessible.
 This guide also assumes you have a Route53 Domain and vaild certificate available
 
 To use this template install AWS cli and SAM cli, it's important that you have both.
 
-###Don't forget to edit them template to fit your needs!
+### Don't forget to edit them template to fit your needs!
 You can get help [Cloudformation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) and [SAM](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md)
 
 To test your API using SAM local:
