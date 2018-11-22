@@ -16,7 +16,7 @@ To test your API using SAM local:
     ```
 2. Use curl or some other tool to test your API's inputs and outputs:
     ```console
-    curl domain.com
+    curl subdomain.domain.com/lambdafunction
     ```
 
 To deploy your template to AWS properly:
